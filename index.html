@@ -13159,3 +13159,101 @@ body[data-theme="light"] #tnc-decline-btn { color: #8c959f; }
 </script>
 
 </body></html>
+// ═══ HARDWARE DATA INJECTION MODULE ═══
+
+window.GeoTwinHardware = {
+
+  // Entry point — yahan se data inject hoga
+  injectData(data) {
+    console.log('[GeoTwin Hardware] Received:', data);
+
+    if (data.temp   !== undefined) this.setLST(data.temp);
+    if (data.ndvi   !== undefined) this.setNDVI(data.ndvi);
+    if (data.ndwi   !== undefined) this.setNDWI(data.ndwi);
+    if (data.moisture !== undefined) this.setSoilMoisture(data.moisture);
+    if (data.lat && data.lng)      this.setGPS(data.lat, data.lng);
+    if (data.ndbi   !== undefined) this.setNDBI(data.ndbi);
+    if (data.flooded !== undefined) this.setFlood(data.flooded);
+  },
+
+  // 🌡️ LST — Land Surface Temperature
+  setLST(temp) {
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    set('lst-mean', temp.toFixed(1) + ' °C');
+    set('lst-max',  (temp + 3.5).toFixed(1) + ' °C');   // estimate
+    set('lst-min',  (temp - 4.2).toFixed(1) + ' °C');   // estimate
+    set('lst-uhi',  (temp > 35 ? 'High' : temp > 30 ? 'Moderate' : 'Low'));
+    console.log('[LST] Injected:', temp);
+  },
+
+  // 🌿 NDVI — Vegetation Index
+  setNDVI(val) {
+    document.getElementById('ndvi-ov-stat').textContent =
+      `NDVI: ${val.toFixed(2)} | ${val > 0.5 ? 'Healthy' : val > 0.2 ? 'Moderate' : 'Low'} Veg`;
+    console.log('[NDVI] Injected:', val);
+  },
+
+  // 💧 NDWI — Water Body
+  setNDWI(val) {
+    const set = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+    set('ndwi-mean', val.toFixed(3));
+    set('ndwi-water-pct', val > 0.3 ? 'High Water' : val > 0 ? 'Wetland' : 'Dry');
+    set('ndwi-positive', val > 0 ? '✅ Yes' : '❌ No');
+    console.log('[NDWI] Injected:', val);
+  },
+
+  // 🌊 SAR Flood
+  setFlood(isFlooded) {
+    document.getElementById('flood-ov-stat').textContent =
+      isFlooded ? '🔴 FLOOD DETECTED' : '🟢 No Flooding';
+    console.log('[Flood] Injected:', isFlooded);
+  },
+
+  // 📍 GPS Coordinates
+  setGPS(lat, lng) {
+    // AOI summary mein inject
+    const el = document.getElementById('aoi-tab-sensors');
+    if (el) {
+      el.innerHTML += `<div style="color:var(--accent-cyan);font-family:var(--font-mono);font-size:.75rem;
+        padding:.5rem;border:1px solid rgba(56,189,248,.3);border-radius:6px;margin-top:.5rem">
+        📍 Live GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}<br>
+        ⏱ Updated: ${new Date().toLocaleTimeString('en-IN')}
+      </div>`;
+    }
+    console.log('[GPS] Injected:', lat, lng);
+  },
+
+  // 🏙️ NDBI — Built-up Index
+  setNDBI(val) {
+    const el = document.getElementById('mndwi-mean');
+    if (el) el.textContent = val.toFixed(3);
+    console.log('[NDBI] Injected:', val);
+  },
+
+  // 💧 Soil Moisture
+  setSoilMoisture(val) {
+    console.log('[Soil Moisture] Injected:', val, '— display element add karo page-soilmoisture mein');
+  }
+};
+
+// ─── WebSocket se connect karo (local hardware server) ───
+function connectHardwareWS(url = 'ws://localhost:8765') {
+  const ws = new WebSocket(url);
+  ws.onopen    = () => console.log('[GeoTwin] Hardware connected ✅');
+  ws.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      window.GeoTwinHardware.injectData(data);
+    } catch(err) {
+      console.error('[GeoTwin] Parse error:', err);
+    }
+  };
+  ws.onerror   = (e) => console.warn('[GeoTwin] WS error:', e);
+  ws.onclose   = ()  => setTimeout(() => connectHardwareWS(url), 3000); // auto-reconnect
+}
+
+// Auto-connect on load
+// connectHardwareWS();  // ← is line ko uncomment karo jab hardware ready ho
